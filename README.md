@@ -99,6 +99,41 @@ samples/bulk.expected.txt 批量文件的期望统计（消息数、回答条数
 
 三条应答覆盖：A 与 AAAA 并列、名字压缩指针指回问题里的名字；CNAME 的 RDATA 里再带一个域名（嵌套解析）；大小写混合的名字。四条坏报文分别命中 `TRUNCATED`、`POINTER_LOOP`（10 层指针链）、`UNSUPPORTED_TYPE`、`LENGTH_MISMATCH`，偏移各不相同。
 
-## 待补的文档
+## 实现说明
 
-实现完成后写清楚：解析器怎么在一次遍历里处理名字与指针、深度与越界是怎么防的、批量文件的处理方式。
+代码在 `dnsmsg.py`（库 + 命令行），测试在 `test_dnsmsg.py`（`python3 -m unittest`）。
+
+### 文件与接口
+
+- `parse_message(msg) -> list[str]`：解析一份报文，返回输出行；出错抛 `DNSError(code, offset)`。
+- `render_message(msg) -> str`：同上但渲染成文本，出错时输出单行 `error,<码>,<偏移>`。
+- `build_query(name, rtype, qid=0, rd=1) -> bytes`：构造查询报文，非法输入抛 `ValueError`。
+- `summarize_bulk(path) -> dict`：解析批量文件并统计。
+- 命令行：`python3 dnsmsg.py query <域名> <类型> [--id N] [--rd 0|1]` 输出报文 hex；
+  `python3 dnsmsg.py parse <hex>` 逐行输出解析结果；`python3 dnsmsg.py bulk <文件>` 输出统计。
+
+### 名字与指针的一次遍历
+
+`read_name(msg, start)` 用单个 `pos` 在报文字节数组上走一遍：遇到普通标签就把它的
+切片（不复制报文）追加到标签列表并前进；遇到指针（高两位 `11`）就记录「主线上名字的
+结束位置」（第一次遇到指针时，为指针后两个字节），然后把 `pos` 移到指针目标继续走；
+遇到结束符停止。最终返回拼好的名字和主线结束位置——游标因此停在指针占用的两个字节
+之后，后续 TYPE/CLASS 从那里继续读，不会跳到指针目标的末尾。
+
+### 深度与越界防护
+
+- **严格向前指**：指针目标必须 `<` 指针自身偏移，否则 `BAD_POINTER`。目标偏移因此
+  严格递减，链必然收敛，自指/互指的环在结构上就不可能出现；同时 `target < pos` 又
+  蕴含目标落在报文范围内（`pos` 本身已校验 `< len(msg)`），越界检查随之成立。
+- **深度上限**：每跟随一层指针计数加一，超过 8 层报 `POINTER_LOOP`，偏移取超过的
+  那一层指针的位置（samples 里 10 层链在第 9 条应答处报出，偏移 29）。
+- **保留形式**：首字节高两位为 `01`/`10` 一律 `BAD_POINTER`，偏移取该字节。
+- **长度**：每次读取前先 `_need(pos, n)` 校验剩余字节，不够报 `TRUNCATED`，偏移取
+  该字段起始；名字展开后的线格式长度累计超过 255 报 `NAME_TOO_LONG`，偏移取名字起始。
+
+### 批量文件处理
+
+`iter_bulk` 按「4 字节大端长度 + 报文字节」流式读取，不一次性载入整个文件；
+每条报文独立走 `parse_message`，单条出错计入 `errors` 不影响后续消息。
+`samples/bulk.bin`（一万条）在本机约 0.1 秒解完；同一报文重复解析输出逐字节一致
+（解析只依赖输入字节，无随机与字典序依赖）。
