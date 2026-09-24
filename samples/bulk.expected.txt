@@ -1,0 +1,6 @@
+messages=10000
+answers=16763
+A=10000
+AAAA=3334
+TXT=2000
+CNAME=1429

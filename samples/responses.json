@@ -1,0 +1,43 @@
+[
+  {
+    "case": "example.com",
+    "hex": "000081800001000200000000076578616d706c6503636f6d0000010001c00c000100010000012c0004c0000201c00c001c00010000012c001020010db8000000000000000000000001",
+    "bytes": 73,
+    "expected": [
+      "id=0",
+      "flags=0x8180",
+      "qdcount=1",
+      "ancount=2",
+      "q,example.com,A,IN",
+      "a,example.com,A,IN,300,192.0.2.1",
+      "a,example.com,AAAA,IN,300,2001:db8::1"
+    ]
+  },
+  {
+    "case": "www.example.com",
+    "hex": "00008180000100020000000003777777076578616d706c6503636f6d0000010001c00c000500010000003c000d076578616d706c6503636f6d00c00c0010000100000078000d07763d7370663120042d616c6c",
+    "bytes": 83,
+    "expected": [
+      "id=0",
+      "flags=0x8180",
+      "qdcount=1",
+      "ancount=2",
+      "q,www.example.com,A,IN",
+      "a,www.example.com,CNAME,IN,60,example.com",
+      "a,www.example.com,TXT,IN,120,\"v=spf1 -all\""
+    ]
+  },
+  {
+    "case": "Mail.Example.COM",
+    "hex": "000081800001000100000000044d61696c074578616d706c6503434f4d0000010001c00c000100010001518000040a010203",
+    "bytes": 50,
+    "expected": [
+      "id=0",
+      "flags=0x8180",
+      "qdcount=1",
+      "ancount=1",
+      "q,Mail.Example.COM,A,IN",
+      "a,Mail.Example.COM,A,IN,86400,10.1.2.3"
+    ]
+  }
+]
